@@ -57,17 +57,20 @@ apt-get install -y aznfs  >> /root/userdata.log 2>&1
 # ---------------------------------------------------------------------------------
 
 mkdir -p /nfs
-echo "${storage_account}.file.core.windows.net:/${storage_account}/nfs /nfs aznfs vers=4.1,defaults 0 0" | \
+echo "${storage_account}.file.core.windows.net:/${storage_account}/nfs /nfs aznfs defaults,vers=4.1,sec=sys,nolock,proto=tcp,_netdev,nofail,bg 0 0" | \
   sudo tee -a /etc/fstab > /dev/null
 systemctl daemon-reload
 mount /nfs
 
 mkdir -p /nfs/home
 mkdir -p /nfs/data
-echo "${storage_account}.file.core.windows.net:/${storage_account}/nfs/home /home aznfs vers=4.1,defaults 0 0" | \
-  sudo tee -a /etc/fstab > /dev/null
-systemctl daemon-reload
-mount /home
+# echo "${storage_account}.file.core.windows.net:/${storage_account}/nfs/home /home aznfs vers=4.1,defaults 0 0" | \
+#   sudo tee -a /etc/fstab > /dev/null
+# systemctl daemon-reload
+# mount /home
+
+mv /home /home.local
+ln -s /nfs/home /home
 
 # ---------------------------------------------------------------------------------
 # Section 5: Configure AD as the identity provider
@@ -241,8 +244,8 @@ su -c "exit" edavis
 # Set NFS directory ownership and permissions
 chgrp mcloud-users /nfs
 chgrp mcloud-users /nfs/data
-chmod 770 /nfs
-chmod 770 /nfs/data
+chmod 775 /nfs
+chmod 775 /nfs/data
 chmod 700 /home/*
 
 cd /nfs
