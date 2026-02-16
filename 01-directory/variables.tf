@@ -1,46 +1,83 @@
-# ==================================================================================================
-# Active Directory naming inputs
-# - dns_zone : FQDN for the AD DNS zone / domain (e.g., mcloud.mikecloud.com)
-# - realm    : Kerberos realm (typically the DNS zone in UPPERCASE)
-# - netbios  : Short (pre-Windows 2000) domain name used by legacy/NetBIOS-aware systems
-# ==================================================================================================
+# ==============================================================================
+# Active Directory Naming Inputs
+# ------------------------------------------------------------------------------
+# Defines DNS, Kerberos, and NetBIOS naming for AD domain.
+# ==============================================================================
 
-# --------------------------------------------------------------------------------
-# DNS zone / AD domain (FQDN)
-# Used by Samba AD DC for DNS namespace and domain identity
-# --------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+# DNS Zone (FQDN)
+# ------------------------------------------------------------------------------
+# Fully qualified AD domain name.
+# Used by Samba AD DC for DNS namespace and identity.
+# ------------------------------------------------------------------------------
 variable "dns_zone" {
-  description = "AD DNS zone / domain (e.g., mcloud.mikecloud.com)"
+
+  description = "AD DNS zone (e.g., mcloud.mikecloud.com)."
   type        = string
   default     = "mcloud.mikecloud.com"
 }
 
-# --------------------------------------------------------------------------------
-# Kerberos realm (UPPERCASE)
-# Convention: match dns_zone but uppercase; required by Kerberos config
-# --------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+# Kerberos Realm (Uppercase)
+# ------------------------------------------------------------------------------
+# Convention: match dns_zone in uppercase.
+# Required for Kerberos authentication configuration.
+# ------------------------------------------------------------------------------
 variable "realm" {
-  description = "Kerberos realm (usually DNS zone in UPPERCASE, e.g., MCLOUD.MIKECLOUD.COM)"
-  type        = string
-  default     = "MCLOUD.MIKECLOUD.COM"
+
+  description = "Kerberos realm (e.g., MCLOUD.MIKECLOUD.COM)."
+
+  type    = string
+  default = "MCLOUD.MIKECLOUD.COM"
 }
 
-# --------------------------------------------------------------------------------
-# NetBIOS short domain name
-# Typically <= 15 characters, uppercase alphanumerics; used by legacy clients and some SMB flows
-# --------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+# NetBIOS Domain Name
+# ------------------------------------------------------------------------------
+# Short domain name (<= 15 chars).
+# Used by legacy systems and SMB workflows.
+# ------------------------------------------------------------------------------
 variable "netbios" {
-  description = "NetBIOS short domain name (e.g., MCLOUD)"
+
+  description = "NetBIOS short name (e.g., MCLOUD)."
   type        = string
   default     = "MCLOUD"
 }
 
-# --------------------------------------------------------------------------------
-# User base DN for LDAP
-# --------------------------------------------------------------------------------
 
+# ------------------------------------------------------------------------------
+# LDAP User Base DN
+# ------------------------------------------------------------------------------
+# Distinguished Name used as base for AD user accounts.
+# ------------------------------------------------------------------------------
 variable "user_base_dn" {
-  description = "User base DN for LDAP (e.g., CN=Users,DC=mcloud,DC=mikecloud,DC=com)"
-  type        = string
-  default     = "CN=Users,DC=mcloud,DC=mikecloud,DC=com"
+
+  description = "LDAP user base DN (e.g., CN=Users,DC=mcloud,DC=mikecloud,DC=com)."
+
+  type    = string
+  default = "CN=Users,DC=mcloud,DC=mikecloud,DC=com"
+}
+
+# ============================================================================== 
+# Variable: bastion_support
+# ------------------------------------------------------------------------------
+# Purpose:
+#   Controls whether Azure Bastion infrastructure is deployed.
+#
+# Behavior:
+#   - true  : Deploy Bastion subnet, NSG, public IP, and Bastion host.
+#   - false : Skip Bastion-related resources entirely.
+#
+# Notes:
+#   - Default is false to avoid unnecessary cost.
+#   - When enabled, dependent resources must use count or for_each logic.
+# ==============================================================================
+
+variable "bastion_support" {
+  description = "Deploy Azure Bastion resources"
+  type        = bool
+  default     = true
 }

@@ -1,62 +1,57 @@
-# ==================================================================================================
-# Virtual Network, Subnets, and Network Security Group
-# - Creates VNet with dedicated subnets for VMs, mini-AD, and Bastion
-# - Configures NSG to allow SSH and RDP
-# - Associates NSG with VM subnet
-# ==================================================================================================
+# ==============================================================================
+# Virtual Network
+# ------------------------------------------------------------------------------
+# Defines primary VNet for AD and supporting infrastructure.
+# ==============================================================================
 
-# --------------------------------------------------------------------------------------------------
-# Define the Virtual Network
-# --------------------------------------------------------------------------------------------------
 resource "azurerm_virtual_network" "ad_vnet" {
+
   name                = "ad-vnet"
-  address_space       = ["10.0.0.0/23"]                     # Overall VNet range
+  address_space       = ["10.0.0.0/23"]
   location            = azurerm_resource_group.ad.location
   resource_group_name = azurerm_resource_group.ad.name
 }
 
-# --------------------------------------------------------------------------------------------------
-# Define VM Subnet (10.0.0.0/25)
-# --------------------------------------------------------------------------------------------------
+
+# ==============================================================================
+# Subnets
+# ------------------------------------------------------------------------------
+# Creates subnets for VMs, Mini-AD, and Bastion.
+# ==============================================================================
+
 resource "azurerm_subnet" "vm_subnet" {
+
   name                 = "vm-subnet"
   resource_group_name  = azurerm_resource_group.ad.name
   virtual_network_name = azurerm_virtual_network.ad_vnet.name
   address_prefixes     = ["10.0.0.0/25"]
+
   default_outbound_access_enabled = false
 }
 
-# --------------------------------------------------------------------------------------------------
-# Define Mini-AD Subnet (10.0.0.128/25)
-# --------------------------------------------------------------------------------------------------
 resource "azurerm_subnet" "mini_ad_subnet" {
+
   name                 = "mini-ad-subnet"
   resource_group_name  = azurerm_resource_group.ad.name
   virtual_network_name = azurerm_virtual_network.ad_vnet.name
   address_prefixes     = ["10.0.0.128/25"]
+
   default_outbound_access_enabled = false
 }
 
-# --------------------------------------------------------------------------------------------------
-# Define Bastion Subnet (10.0.1.0/25)
-# NOTE: Bastion requires subnet name to be exactly "AzureBastionSubnet"
-# --------------------------------------------------------------------------------------------------
-resource "azurerm_subnet" "bastion_subnet" {
-  name                 = "AzureBastionSubnet"
-  resource_group_name  = azurerm_resource_group.ad.name
-  virtual_network_name = azurerm_virtual_network.ad_vnet.name
-  address_prefixes     = ["10.0.1.0/25"]
-}
+# ==============================================================================
+# VM Network Security Group
+# ------------------------------------------------------------------------------
+# Allows SSH and RDP inbound to VM subnet.
+# ==============================================================================
 
-# --------------------------------------------------------------------------------------------------
-# Define Network Security Group (NSG) for VM subnet
-# --------------------------------------------------------------------------------------------------
 resource "azurerm_network_security_group" "vm_nsg" {
+
   name                = "vm-nsg"
   location            = azurerm_resource_group.ad.location
   resource_group_name = azurerm_resource_group.ad.name
 
-  # Allow inbound SSH (Linux admin access)
+  # Inbound SSH
   security_rule {
     name                       = "Allow-SSH"
     priority                   = 1001
@@ -69,7 +64,7 @@ resource "azurerm_network_security_group" "vm_nsg" {
     destination_address_prefix = "*"
   }
 
-  # Allow inbound RDP (Windows admin access)
+  # Inbound RDP
   security_rule {
     name                       = "Allow-RDP"
     priority                   = 1002
@@ -81,35 +76,31 @@ resource "azurerm_network_security_group" "vm_nsg" {
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
-
-  # Allow inbound SMB (AD and file share access)
-  security_rule {
-    name                       = "Allow-SMB"
-    priority                   = 1003
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "445"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
-  }
 }
 
-# --------------------------------------------------------------------------------------------------
-# Associate NSG with VM subnet
-# --------------------------------------------------------------------------------------------------
-resource "azurerm_subnet_network_security_group_association" "vm_nsg_assoc" {
+
+# ==============================================================================
+# NSG Association
+# ------------------------------------------------------------------------------
+# Associates VM subnet with VM NSG.
+# ==============================================================================
+
+resource "azurerm_subnet_network_security_group_association" "vm-nsg-assoc" {
+
   subnet_id                 = azurerm_subnet.vm_subnet.id
   network_security_group_id = azurerm_network_security_group.vm_nsg.id
 }
 
-# --------------------------------------------------------------------------------------------------
-# NAT Gateway: Public IP, Gateway, and Associations
-# --------------------------------------------------------------------------------------------------
+
+# ==============================================================================
+# NAT Gateway Configuration
+# ------------------------------------------------------------------------------
+# Provides outbound internet access for private subnets.
+# ==============================================================================
 
 # Public IP for NAT Gateway
 resource "azurerm_public_ip" "nat_gateway_pip" {
+
   name                = "nat-gateway-pip"
   location            = azurerm_resource_group.ad.location
   resource_group_name = azurerm_resource_group.ad.name
@@ -117,29 +108,33 @@ resource "azurerm_public_ip" "nat_gateway_pip" {
   sku                 = "Standard"
 }
 
-# NAT Gateway Resource
+# NAT Gateway resource
 resource "azurerm_nat_gateway" "vm_nat_gateway" {
-  name                = "vm-nat-gateway"
-  location            = azurerm_resource_group.ad.location
-  resource_group_name = azurerm_resource_group.ad.name
-  sku_name            = "Standard"
+
+  name                    = "vm-nat-gateway"
+  location                = azurerm_resource_group.ad.location
+  resource_group_name     = azurerm_resource_group.ad.name
+  sku_name                = "Standard"
   idle_timeout_in_minutes = 10
 }
 
-# Associate Public IP with NAT Gateway
+# Associate public IP with NAT Gateway
 resource "azurerm_nat_gateway_public_ip_association" "nat_gw_pip_assoc" {
+
   nat_gateway_id       = azurerm_nat_gateway.vm_nat_gateway.id
   public_ip_address_id = azurerm_public_ip.nat_gateway_pip.id
 }
 
-# Associate NAT Gateway with VM Subnet
+# Associate NAT with VM subnet
 resource "azurerm_subnet_nat_gateway_association" "vm_nat_assoc" {
+
   subnet_id      = azurerm_subnet.vm_subnet.id
   nat_gateway_id = azurerm_nat_gateway.vm_nat_gateway.id
 }
 
-# Associate NAT Gateway with Mini-AD Subnet
+# Associate NAT with Mini-AD subnet
 resource "azurerm_subnet_nat_gateway_association" "mini_ad_nat_assoc" {
+
   subnet_id      = azurerm_subnet.mini_ad_subnet.id
   nat_gateway_id = azurerm_nat_gateway.vm_nat_gateway.id
 }

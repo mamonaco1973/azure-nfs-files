@@ -1,47 +1,57 @@
-# ==========================================================================================
-# Mini Active Directory (mini-ad) Module Invocation
-# ------------------------------------------------------------------------------------------
-# Purpose:
-#   - Calls the reusable "mini-ad" module to provision an Ubuntu-based AD Domain Controller
-#   - Passes in networking, DNS, and authentication parameters
-#   - Supplies user account definitions via a JSON blob generated from a template
-# ==========================================================================================
+# ==============================================================================
+# Mini Active Directory Module Invocation
+# ------------------------------------------------------------------------------
+# Calls reusable mini-ad module to deploy Ubuntu-based AD controller.
+# Passes networking, DNS, authentication, and user parameters.
+# ==============================================================================
 
 module "mini_ad" {
-  source            = "github.com/mamonaco1973/module-azure-mini-ad" # Path to the mini-ad Terraform module
-  location          = var.resource_group_location                    # Azure region (from input variable)
-  netbios           = var.netbios                                    # NetBIOS domain name (e.g., MCLOUD)
-  vnet_id           = azurerm_virtual_network.ad_vnet.id             # Virtual Network where the AD will reside
-  realm             = var.realm                                      # Kerberos realm (usually UPPERCASE DNS domain)
-  users_json        = local.users_json                               # JSON blob of users and passwords (built below)
-  user_base_dn      = var.user_base_dn                               # Base DN for user accounts in LDAP
-  ad_admin_password = random_password.admin_password.result          # Randomized AD administrator password
-  dns_zone          = var.dns_zone                                   # DNS zone (e.g., mcloud.mikecloud.com)
-  subnet_id         = azurerm_subnet.mini_ad_subnet.id               # Subnet for AD VM placement
-  admin_password    = random_password.sysadmin_password.result       # Linux sysadmin password for AD VM
 
-  depends_on = [azurerm_nat_gateway.vm_nat_gateway,azurerm_subnet_nat_gateway_association.mini_ad_nat_assoc]
+  source   = "github.com/mamonaco1973/module-azure-mini-ad"
+  location = var.resource_group_location
+  netbios  = var.netbios
+  vnet_id  = azurerm_virtual_network.ad_vnet.id
+  realm    = var.realm
 
+  # JSON blob containing user definitions.
+  users_json = local.users_json
+
+  user_base_dn      = var.user_base_dn
+  ad_admin_password = random_password.admin_password.result
+  dns_zone          = var.dns_zone
+  subnet_id         = azurerm_subnet.mini_ad_subnet.id
+  admin_password    = random_password.sysadmin_password.result
+
+  # Ensure NAT and subnet association exist before AD deployment.
+  depends_on = [
+    azurerm_nat_gateway.vm_nat_gateway,
+    azurerm_subnet_nat_gateway_association.mini_ad_nat_assoc
+  ]
 }
 
-# ==========================================================================================
+
+# ==============================================================================
 # Local Variable: users_json
-# ------------------------------------------------------------------------------------------
-# - Renders a JSON file (`users.json.template`) into a single JSON blob
-# - Injects unique random passwords for test/demo users
-# - Template variables are replaced with real values at runtime
-# - Passed into the VM bootstrap so users are created automatically
-# ==========================================================================================
+# ------------------------------------------------------------------------------
+# Renders users.json.template into JSON string.
+# Injects randomized passwords for demo/test users.
+# Passed to VM bootstrap for automatic account creation.
+# ==============================================================================
 
 locals {
-  users_json = templatefile("./scripts/users.json.template", {
-    USER_BASE_DN    = var.user_base_dn                       # Base DN for placing new users in LDAP
-    DNS_ZONE        = var.dns_zone                           # AD-integrated DNS zone
-    REALM           = var.realm                              # Kerberos realm (FQDN in uppercase)
-    NETBIOS         = var.netbios                            # NetBIOS domain name
-    jsmith_password = random_password.jsmith_password.result # Random password for John Smith
-    edavis_password = random_password.edavis_password.result # Random password for Emily Davis
-    rpatel_password = random_password.rpatel_password.result # Random password for Raj Patel
-    akumar_password = random_password.akumar_password.result # Random password for Amit Kumar
-  })
+
+  users_json = templatefile(
+    "./scripts/users.json.template",
+    {
+      USER_BASE_DN = var.user_base_dn
+      DNS_ZONE     = var.dns_zone
+      REALM        = var.realm
+      NETBIOS      = var.netbios
+
+      jsmith_password = random_password.jsmith_password.result
+      edavis_password = random_password.edavis_password.result
+      rpatel_password = random_password.rpatel_password.result
+      akumar_password = random_password.akumar_password.result
+    }
+  )
 }

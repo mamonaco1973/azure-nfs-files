@@ -1,66 +1,112 @@
-# ==================================================================================================
-# Linux VM Deployment with Ubuntu Account (NFS Gateway)
-# - Generates secure credentials for the 'ubuntu' account
-# - Stores credentials in Azure Key Vault
-# - Provisions a NIC, Linux VM, and assigns permissions
-# ==================================================================================================
+# ==============================================================================
+# Linux VM Deployment: NFS Gateway
+# ------------------------------------------------------------------------------
+# Provisions Ubuntu-based NFS gateway VM.
+# Generates ubuntu credentials and stores them in Key Vault.
+# Creates public IP with DNS label matching VM name.
+# Creates NIC and assigns Key Vault read permissions to VM identity.
+# ==============================================================================
 
-# --------------------------------------------------------------------------------------------------
-# Generate a secure random password for the 'ubuntu' account
-# --------------------------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+# Random Password: ubuntu
+# ------------------------------------------------------------------------------
+# Generates secure password for ubuntu account.
+# ------------------------------------------------------------------------------
 resource "random_password" "ubuntu_password" {
-  length           = 24        # 24-character password
-  special          = true      # Include special characters
-  override_special = "!@#$%"   # Restrict allowed special characters
+
+  length           = 24
+  special          = true
+  override_special = "!@#$%"
 }
 
-# --------------------------------------------------------------------------------------------------
-# Store 'ubuntu' credentials securely in Azure Key Vault as a JSON object
-# --------------------------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+# Key Vault Secret: ubuntu credentials
+# ------------------------------------------------------------------------------
+# Stores ubuntu username/password as JSON object.
+# ------------------------------------------------------------------------------
 resource "azurerm_key_vault_secret" "ubuntu_secret" {
-  name         = "ubuntu-credentials"                         # Secret name
-  value        = jsonencode({ username = "ubuntu", password = random_password.ubuntu_password.result })
-  key_vault_id = data.azurerm_key_vault.ad_key_vault.id        # Target existing Key Vault
-  content_type = "application/json"                           # Mark content as JSON
+
+  name = "ubuntu-credentials"
+
+  value = jsonencode({
+    username = "ubuntu"
+    password = random_password.ubuntu_password.result
+  })
+
+  key_vault_id = data.azurerm_key_vault.ad_key_vault.id
+  content_type = "application/json"
 }
 
-# --------------------------------------------------------------------------------------------------
-# Create a Network Interface (NIC) for the NFS Gateway VM
-# --------------------------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+# Public IP: NFS Gateway
+# ------------------------------------------------------------------------------
+# Creates static public IP.
+# DNS label matches VM name.
+# ------------------------------------------------------------------------------
+resource "azurerm_public_ip" "nfs_gateway_pip" {
+
+  name                = "nfs-gateway-pip"
+  location            = data.azurerm_resource_group.ad.location
+  resource_group_name = data.azurerm_resource_group.ad.name
+
+  allocation_method = "Static"
+  sku               = "Standard"
+
+  domain_name_label = "nfs-gateway-${random_string.vm_suffix.result}"
+}
+
+
+# ------------------------------------------------------------------------------
+# Network Interface: NFS Gateway
+# ------------------------------------------------------------------------------
+# Creates NIC in VM subnet for NFS gateway VM.
+# Associates public IP for internet access.
+# ------------------------------------------------------------------------------
 resource "azurerm_network_interface" "nfs_gateway_nic" {
+
   name                = "nfs-gateway-nic"
   location            = data.azurerm_resource_group.ad.location
   resource_group_name = data.azurerm_resource_group.ad.name
 
   ip_configuration {
-    name                          = "internal"                        # IP configuration label
-    subnet_id                     = data.azurerm_subnet.vm_subnet.id  # Connect to existing subnet
-    private_ip_address_allocation = "Dynamic"                         # Dynamic private IP assignment
+    name                          = "internal"
+    subnet_id                     = data.azurerm_subnet.vm_subnet.id
+    private_ip_address_allocation = "Dynamic"
+
+    public_ip_address_id = azurerm_public_ip.nfs_gateway_pip.id
   }
 }
 
-# --------------------------------------------------------------------------------------------------
-# Provision the NFS Gateway Linux Virtual Machine
-# --------------------------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+# Linux Virtual Machine: NFS Gateway
+# ------------------------------------------------------------------------------
+# Deploys Ubuntu 24.04 LTS VM and injects cloud-init via custom_data.
+# ------------------------------------------------------------------------------
 resource "azurerm_linux_virtual_machine" "nfs_gateway" {
-  name                            = "nfs-gateway-${random_string.vm_suffix.result}" # VM name with suffix
-  location                        = data.azurerm_resource_group.ad.location
-  resource_group_name             = data.azurerm_resource_group.ad.name
-  size                            = "Standard_B1s"                  # Small VM size (dev/test)
-  admin_username                  = "ubuntu"                        # Admin username
+
+  name = "nfs-gateway-${random_string.vm_suffix.result}"
+
+  location            = data.azurerm_resource_group.ad.location
+  resource_group_name = data.azurerm_resource_group.ad.name
+  size                = "Standard_B1s"
+
+  admin_username                  = "ubuntu"
   admin_password                  = random_password.ubuntu_password.result
-  disable_password_authentication = false                           # Allow password login
+  disable_password_authentication = false
 
-  # Attach NIC
-  network_interface_ids = [ azurerm_network_interface.nfs_gateway_nic.id ]
+  network_interface_ids = [
+    azurerm_network_interface.nfs_gateway_nic.id
+  ]
 
-  # Configure OS disk
   os_disk {
     caching              = "ReadWrite"
     storage_account_type = "Standard_LRS"
   }
 
-  # Base image: Ubuntu 24.04 LTS from Azure Marketplace
   source_image_reference {
     publisher = "canonical"
     offer     = "ubuntu-24_04-lts"
@@ -68,27 +114,34 @@ resource "azurerm_linux_virtual_machine" "nfs_gateway" {
     version   = "latest"
   }
 
-  # Inject cloud-init script (custom_data)
-  custom_data = base64encode(templatefile("./scripts/custom_data.sh", {
-    vault_name      = data.azurerm_key_vault.ad_key_vault.name
-    domain_fqdn     = var.dns_zone
-    netbios         = var.netbios
-    force_group     = "mcloud-users"
-    realm           = var.realm
-    storage_account = azurerm_storage_account.nfs_storage_account.name
-  }))
+  # Cloud-init bootstrap
+  custom_data = base64encode(templatefile(
+    "./scripts/custom_data.sh",
+    {
+      vault_name      = data.azurerm_key_vault.ad_key_vault.name
+      domain_fqdn     = var.dns_zone
+      netbios         = var.netbios
+      force_group     = "mcloud-users"
+      realm           = var.realm
+      storage_account = azurerm_storage_account.nfs_storage_account.name
+    }
+  ))
 
-  # Enable system-assigned managed identity
   identity {
     type = "SystemAssigned"
   }
 }
 
-# --------------------------------------------------------------------------------------------------
-# Grant VM's managed identity permission to read Key Vault secrets
-# --------------------------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+# RBAC: VM Managed Identity Access to Key Vault
+# ------------------------------------------------------------------------------
+# Grants VM permission to read secrets from Key Vault.
+# ------------------------------------------------------------------------------
 resource "azurerm_role_assignment" "vm_lnx_key_vault_secrets_user" {
+
   scope                = data.azurerm_key_vault.ad_key_vault.id
   role_definition_name = "Key Vault Secrets User"
-  principal_id         = azurerm_linux_virtual_machine.nfs_gateway.identity[0].principal_id
+
+  principal_id = azurerm_linux_virtual_machine.nfs_gateway.identity[0].principal_id
 }

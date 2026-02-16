@@ -1,19 +1,24 @@
-# ==================================================================================================
-# Azure Bastion Deployment
-# - Creates Network Security Group (NSG) for Bastion
-# - Allocates a public IP for Bastion
-# - Deploys the Bastion Host in its own subnet
-# ==================================================================================================
+# ==============================================================================
+# Azure Bastion Support
+# ------------------------------------------------------------------------------
+# Purpose:
+#   Install everything required for Azure Bastion.
+#
+# Behavior:
+#   - Created only when var.bastion_support == true
+# ==============================================================================
 
-# --------------------------------------------------------------------------------------------------
-# Define a Network Security Group (NSG) for the Bastion host
-# --------------------------------------------------------------------------------------------------
-resource "azurerm_network_security_group" "bastion_nsg" {
+resource "azurerm_network_security_group" "bastion-nsg" {
+
+  count = var.bastion_support ? 1 : 0
+
   name                = "bastion-nsg"
   location            = azurerm_resource_group.ad.location
   resource_group_name = azurerm_resource_group.ad.name
 
-  # Allow inbound traffic from Azure Gateway Manager (required for Bastion service)
+  # ---------------------------------------------------------------------------
+  # Inbound: Gateway Manager
+  # ---------------------------------------------------------------------------
   security_rule {
     name                       = "GatewayManager"
     priority                   = 1001
@@ -26,7 +31,9 @@ resource "azurerm_network_security_group" "bastion_nsg" {
     destination_address_prefix = "*"
   }
 
-  # Allow inbound HTTPS traffic from Internet (used to connect via Bastion public IP)
+  # ---------------------------------------------------------------------------
+  # Inbound: Internet to Bastion Public IP
+  # ---------------------------------------------------------------------------
   security_rule {
     name                       = "Internet-Bastion-PublicIP"
     priority                   = 1002
@@ -39,7 +46,9 @@ resource "azurerm_network_security_group" "bastion_nsg" {
     destination_address_prefix = "*"
   }
 
-  # Allow outbound RDP (3389) and SSH (22) to internal virtual network
+  # ---------------------------------------------------------------------------
+  # Outbound: Virtual Network
+  # ---------------------------------------------------------------------------
   security_rule {
     name                       = "OutboundVirtualNetwork"
     priority                   = 1001
@@ -52,7 +61,9 @@ resource "azurerm_network_security_group" "bastion_nsg" {
     destination_address_prefix = "VirtualNetwork"
   }
 
-  # Allow outbound HTTPS to Azure Cloud (required for Bastion management/control plane)
+  # ---------------------------------------------------------------------------
+  # Outbound: Azure Cloud
+  # ---------------------------------------------------------------------------
   security_rule {
     name                       = "OutboundToAzureCloud"
     priority                   = 1002
@@ -66,32 +77,70 @@ resource "azurerm_network_security_group" "bastion_nsg" {
   }
 }
 
-# --------------------------------------------------------------------------------------------------
-# Allocate a Public IP for the Bastion host
-# --------------------------------------------------------------------------------------------------
-resource "azurerm_public_ip" "bastion_ip" {
+# ==============================================================================
+# Azure Bastion Subnet
+# ------------------------------------------------------------------------------
+# Purpose:
+#   Dedicated subnet required by Azure Bastion.
+#
+# Behavior:
+#   - Must be named exactly "AzureBastionSubnet"
+#   - Created only when var.bastion_support == true
+# ==============================================================================
+
+resource "azurerm_subnet" "bastion_subnet" {
+
+  count = var.bastion_support ? 1 : 0
+
+  name                 = "AzureBastionSubnet"
+  resource_group_name  = azurerm_resource_group.ad.name
+  virtual_network_name = azurerm_virtual_network.ad_vnet.name
+  address_prefixes     = ["10.0.1.0/25"]
+}
+
+# ==============================================================================
+# Azure Bastion Public IP
+# ------------------------------------------------------------------------------
+# Purpose:
+#   Creates required Standard SKU static public IP for Bastion.
+#
+# Behavior:
+#   - Created only when var.bastion_support == true
+# ==============================================================================
+
+resource "azurerm_public_ip" "bastion-ip" {
+
+  count = var.bastion_support ? 1 : 0
+
   name                = "bastion-public-ip"
   location            = azurerm_resource_group.ad.location
   resource_group_name = azurerm_resource_group.ad.name
-  allocation_method   = "Static"     # Bastion requires static IP
-  sku                 = "Standard"   # Bastion requires Standard SKU
+  allocation_method   = "Static"
+  sku                 = "Standard"
 }
 
-# --------------------------------------------------------------------------------------------------
-# Deploy the Azure Bastion host
-# --------------------------------------------------------------------------------------------------
-resource "azurerm_bastion_host" "bastion_host" {
+# ==============================================================================
+# Azure Bastion Host
+# ------------------------------------------------------------------------------
+# Purpose:
+#   Deploys Azure Bastion host into dedicated subnet.
+#
+# Behavior:
+#   - Created only when var.bastion_support == true
+#   - References indexed resources created via count
+# ==============================================================================
+
+resource "azurerm_bastion_host" "bastion-host" {
+
+  count = var.bastion_support ? 1 : 0
+
   name                = "bastion-host"
   location            = azurerm_resource_group.ad.location
   resource_group_name = azurerm_resource_group.ad.name
 
   ip_configuration {
     name                 = "bastion-ip-config"
-    subnet_id            = azurerm_subnet.bastion_subnet.id
-    public_ip_address_id = azurerm_public_ip.bastion_ip.id
+    subnet_id            = azurerm_subnet.bastion_subnet[0].id
+    public_ip_address_id = azurerm_public_ip.bastion-ip[0].id
   }
-
-  depends_on = [ azurerm_subnet.vm_subnet, 
-                 azurerm_subnet.mini_ad_subnet, 
-                 azurerm_subnet.bastion_subnet ]    
 }
