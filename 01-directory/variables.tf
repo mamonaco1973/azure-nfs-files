@@ -81,3 +81,23 @@ variable "bastion_support" {
   type        = bool
   default     = true
 }
+
+# ------------------------------------------------------------------------------
+# Variables: Resource Group Configuration
+# ------------------------------------------------------------------------------
+# Defines the name and Azure region for the primary Resource Group.
+# Defaults are provided for Quick Start deployments but may be
+# overridden via terraform.tfvars or CLI variables.
+# ------------------------------------------------------------------------------
+
+variable "resource_group_name" {
+  description = "Azure resource group name."
+  type        = string
+  default     = "nfs-project-rg"
+}
+
+variable "resource_group_location" {
+  description = "Azure region for resource group."
+  type        = string
+  default     = "Central US"
+}
