@@ -28,11 +28,11 @@ set -euo pipefail
 # ------------------------------------------------------------------------------
 RESOURCE_GROUP="nfs-project-rg"
 
-WIN_LABEL_PREFIX="win-adminuser-"
+WIN_LABEL_PREFIX="win-ad-"
 LINUX_LABEL_PREFIX="nfs-gateway-"
 
 # Key Vault prefix for this NFS Gateway Quick Start (credentials/secrets storage).
-KEYVAULT_PREFIX="nfs-key-vault"
+KEYVAULT_PREFIX="ad-key-vault"
 
 # ------------------------------------------------------------------------------
 # Helpers

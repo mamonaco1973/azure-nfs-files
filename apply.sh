@@ -69,3 +69,11 @@ terraform init
 terraform apply -var="vault_name=$vault" -auto-approve
 
 cd ..
+
+# ------------------------------------------------------------------------------
+# Build Validation
+# ------------------------------------------------------------------------------
+echo "NOTE: Running post-build validation..."
+
+./validate.sh
+
