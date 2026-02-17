@@ -79,7 +79,7 @@ variable "user_base_dn" {
 variable "bastion_support" {
   description = "Deploy Azure Bastion resources"
   type        = bool
-  default     = true
+  default     = false
 }
 
 # ------------------------------------------------------------------------------
