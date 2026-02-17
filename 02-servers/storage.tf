@@ -89,9 +89,9 @@ resource "azurerm_storage_blob" "ad_join_script" {
   type                   = "Block"
   source                 = local_file.ad_join_rendered.filename
 
-  metadata = {
-    force_update = timestamp()
-  }
+  # metadata = {
+  #   force_update = timestamp()
+  # }
 }
 
 
