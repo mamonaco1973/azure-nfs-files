@@ -125,11 +125,19 @@ resource "random_password" "admin_password" {
   override_special = "-_"
 }
 
+locals {
+  # The mini-AD module rejects an admin password that starts with a dash, and
+  # random_password can't pin the first character. Prefix a fixed safe char so
+  # a leading "-" is impossible. Both consumers (module + Key Vault) use this
+  # value so the stored secret always matches the real AD password.
+  admin_ad_password = "A${random_password.admin_password.result}"
+}
+
 resource "azurerm_key_vault_secret" "admin_secret" {
   name = "admin-ad-credentials"
   value = jsonencode({
     username = "Admin@${var.dns_zone}"
-    password = random_password.admin_password.result
+    password = local.admin_ad_password
   })
   key_vault_id = azurerm_key_vault.ad_key_vault.id
   depends_on   = [azurerm_role_assignment.kv_role_assignment]

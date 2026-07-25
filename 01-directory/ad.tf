@@ -17,7 +17,7 @@ module "mini_ad" {
   users_json = local.users_json
 
   user_base_dn      = var.user_base_dn
-  ad_admin_password = random_password.admin_password.result
+  ad_admin_password = local.admin_ad_password
   dns_zone          = var.dns_zone
   subnet_id         = azurerm_subnet.mini_ad_subnet.id
   admin_password    = random_password.sysadmin_password.result
